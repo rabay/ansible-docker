@@ -1,2 +1,43 @@
 ---
 # tasks file for docker
+  - name: install pre-requisites
+    yum:
+      name: "{{ packages }}"
+      state: present
+      update_cache: no
+    vars:
+      packages:
+        - yum-utils
+        - device-mapper-persistent-data
+        - lvm2
+    tags:
+      - requisites
+
+  - name: start cntlm
+    command: systemctl start cntlm
+    tags: 
+      - requisites
+
+  - name: install docker-ce repo
+    command: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    tags: 
+      - requisites
+
+  - name: install docker-ce
+    yum:
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+        - docker-ce
+        - docker-ce-cli
+        - containerd.io
+    notify: reboot docker server
+    tags:
+      - install
+
+  - name: stop cntlm
+    command: systemctl stop cntlm
+    tags: 
+      - requisites
