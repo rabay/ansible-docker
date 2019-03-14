@@ -1,9 +1,21 @@
 ---
   - hosts: docker
     become: true
+    gather_facts: false
     tasks: 
-      - name: configure system language
+      - name: configure system language (locale)
         command: localectl set-locale LANG=en_US.UTF-8
+        notify: reboot server
+        tags: locale
+
+      - name: configure keymapping
+        command: localectl set-keymap br-abnt2
+        notify: reboot server
+        tags: locale
+
+      - name: set timezone to America/Sao_Paulo
+        timezone:
+          name: America/Sao_Paulo
         notify: reboot server
         tags: locale
 
@@ -17,12 +29,14 @@
             export http_proxy=http://127.0.0.1:3128
             export https_proxy=$http_proxy
             no_proxy=vm-centos-7-*,192.168.235.100,192.168.235.101,192.168.235.102,192.168.235.103,192.168.235.104,192.168.235.105,192.168.235.106,192.168.235.107,192.168.235.108,192.168.235.109,192.168.235.110,192.168.235.111,192.168.235.112,192.168.235.113,192.168.235.114,192.168.235.115,192.168.235.116,192.168.235.117,192.168.235.118,192.168.235.119,192.168.235.120,192.168.235.121,192.168.235.122,192.168.235.123,192.168.235.124,192.168.235.125,192.168.235.126,192.168.235.127,192.168.235.128,192.168.235.129,192.168.235.130,192.168.235.131,192.168.235.132,192.168.235.133,192.168.235.134,192.168.235.135,192.168.235.136,192.168.235.137,192.168.235.138,192.168.235.139,192.168.235.140,192.168.235.141,192.168.235.142,192.168.235.143,192.168.235.144,192.168.235.145,192.168.235.146,192.168.235.147,192.168.235.148,192.168.235.149,192.168.235.150,127.0.0.1,localhost,scopus.com.br
+          force: no
         tags: proxy
 
       - name: start cntlm
-        command: systemctl start cntlm
+        systemd:
+          name: cntlm
+          state: started
         tags: 
-          - yum
           - proxy
 
       - name: get all yum repo configuration files
@@ -55,20 +69,14 @@
         tags: yum
 
       - name: clear yum cache
-        command: yum clean all
-        warn: false
+        shell: yum clean all
+        args:
+          warn: False
         tags: yum
         
       - name: generate yum cache
-        command: yum makecache fast
-        warn: false
-        tags: yum
-        
-      - name: stop cntlm
-        command: systemctl stop cntlm
-        tags: 
-          - yum
-          - proxy
+        yum:
+          update_cache: yes
 
       - name: update installed packages
         yum:
@@ -88,6 +96,13 @@
             - htop
             - net-tools
         tags: tools
+
+      - name: stop cntlm
+        systemd:
+          name: cntlm
+          state: stopped
+        tags: 
+          - proxy
 
     handlers:
       - name: reboot server

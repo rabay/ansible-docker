@@ -1,0 +1,10 @@
+{
+  "log-driver": "{{ dkr_logdriver }}",
+  "log-opts": {"max-size": "{{ dkr_logmaxsize }}", "max-file": "{{ dkr_maxfile }}"},
+  "storage-driver": "{{ dkr_storagedriver }}",
+  "storage-opts": [
+    "dm.thinpooldev={{ dkr_thinpooldev }}",
+    "dm.use_deferred_removal={{ dkr_defremoval }}",
+    "dm.use_deferred_deletion={{ dkr_defdel }}"
+  ]
+}

@@ -1,0 +1,9 @@
+---
+lvmDisk: "/dev/sdb"
+dkr_logdriver: "json-file"
+dkr_logmaxsize: "10m"
+dkr_maxfile: "3"
+dkr_storagedriver: "devicemapper"
+dkr_thinpooldev: "/dev/mapper/docker-tpmeta"
+dkr_defremoval: "true"
+dkr_defdel: "true"

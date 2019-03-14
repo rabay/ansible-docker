@@ -23,8 +23,14 @@
     tags: 
       - requisites
 
+  - name: disable docker-ce repo
+    command: yum-config-manager --disable docker-ce-stable
+    tags: 
+      - requisites
+
   - name: install docker-ce
     yum:
+      enablerepo: docker-ce-stable
       name: "{{ packages }}"
       state: present
       update_cache: yes

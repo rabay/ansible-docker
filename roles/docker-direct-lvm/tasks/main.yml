@@ -1,0 +1,116 @@
+---
+# tasks file for docker-direct-lvm
+# For more info: https://docs.docker.com/storage/storagedriver/device-mapper-driver/#configure-direct-lvm-mode-manually
+
+- name: check if physical volume exists
+  command: pvdisplay
+  register: var_pvs
+  tags: lvm
+
+- name: create the phisical volume
+  command: pvcreate "{{lvmDisk}}"
+  when: "lvmDisk not in var_pvs.stdout"
+  tags: lvm
+
+- name: create the volume group
+  lvg:
+    vg: docker
+    pvs: "{{lvmDisk}}"
+    state: present
+  tags: lvm
+
+- name: check if logical volume exists
+  command: lvdisplay
+  register: var_lvs
+  tags: lvm
+
+- debug: var=var_lvs
+  tags: lvm
+
+- name: create the logical volume "tpvolume"
+  lvol:
+    vg: docker
+    lv: tpvolume
+    size: 95%VG
+    opts: --wipesignatures y
+    state: present
+  when: "'tpvolume' not in var_lvs.stdout"
+  tags: lvm
+
+- name: create the logical volume "tpmeta"
+  lvol: 
+    vg: docker
+    lv: tpmeta
+    size: 1%VG
+    opts: --wipesignatures y
+    state: present
+  when: "'tpmeta' not in var_lvs.stdout"
+  tags: lvm
+
+#- name: Make sure test thin pool does not exist (delete if exists)
+#  lvol:
+#    vg: docker
+#    lv: tpvolume
+#    state: absent
+#    force: yes
+
+- name: create a thin pool
+  lvol:
+    vg: docker
+    thinpool: tpvolume
+    opts: --poolmetadata docker/tpmeta
+    force: no
+  tags: lvm
+
+- name: configure autoextension of thin pools via an lvm profile
+  copy:
+    dest: "/etc/lvm/profile/docker-thinpool.profile"
+    content: |
+      activation {
+        thin_pool_autoextend_threshold=80
+        thin_pool_autoextend_percent=20
+      }
+    force: no
+  tags: lvm
+
+- name: Apply the LVM profile
+  command: lvchange --metadataprofile docker-thinpool docker/tpvolume
+  tags: lvm
+
+- name: Ensure monitoring of the logical volume is enabled.
+  command: lvchange --monitor y docker/tpvolume
+  tags: lvm
+
+- name: create config dir
+  file:
+    path: /etc/docker
+    state: directory
+    mode: 0600
+    owner: root
+    group: root
+  tags: lvm
+
+#- name: Edit /etc/docker/daemon.json and configure the options
+#  copy: 
+#    dest: "/etc/docker/daemon.json"
+#    content: |
+#      {
+#        "storage-driver": "devicemapper",
+#        "storage-opts": [
+#        "dm.thinpooldev=/dev/mapper/docker-tpmeta",
+#        "dm.use_deferred_removal=true",
+#        "dm.use_deferred_deletion=true"
+#        ]
+#      }
+#    force: yes
+#  tags: lvm
+
+- name: Edit /etc/docker/daemon.json and configure the options
+  template: 
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    mode: 0644
+    backup: yes
+    force: yes
+  tags:
+    - lvm
