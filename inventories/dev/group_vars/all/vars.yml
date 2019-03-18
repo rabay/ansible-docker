@@ -1,9 +1,40 @@
 ---
 lvmDisk: "/dev/sdb"
+lvmGroup: "vg_docker"
+lvmVolume: "vol_docker"
+lvmMountPoint: "/var/lib/docker"
+enableproxy: "true"
+dkr_selinuxenabled: "false"
+dkr_enabledebug: "true"
+dkr_enabletls: "false"
+dkr_tlscacertpath: ""
+dkr_tlscertpath: ""
+dkr_tlskeypath: ""
+dkr_tlsverify: ""
 dkr_logdriver: "json-file"
+dkr_loglevel: "debug"
 dkr_logmaxsize: "10m"
 dkr_maxfile: "3"
-dkr_storagedriver: "devicemapper"
-dkr_thinpooldev: "/dev/mapper/docker-tpmeta"
-dkr_defremoval: "true"
-dkr_defdel: "true"
+
+######## STORAGE devicemapper config ########
+#dkr_storagedriver: "devicemapper"
+#dkr_storagefs: "xfs"
+#dkr_thinpooldev: "/dev/mapper/docker-tpvolume"
+#dkr_defremoval: true
+#dkr_defdel: true
+#############################################
+
+########## STORAGE overlay2 config ##########
+dkr_storagedriver: "overlay2"
+dkr_storagefs: "xfs"
+dkr_thinpooldev: ""
+dkr_defremoval: ""
+dkr_defdel: ""
+#############################################
+
+dkr_enableproxy: true
+dkr_httpproxy: "http://127.0.0.1:3128"
+dkr_httpsproxy: "http://127.0.0.1:3128"
+dkr_noproxy: "localhost,127.0.0.1"
+dkr_listenip: "0.0.0.0"
+dkr_listenport: "2375"

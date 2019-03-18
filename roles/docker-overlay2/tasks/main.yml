@@ -1,0 +1,140 @@
+---
+# tasks file for docker-overlay2
+# READ MORE: https://docs.docker.com/storage/storagedriver/overlayfs-driver/
+- name: if Docker running, stop the service
+  systemd:
+    name: docker
+    state: stopped
+  tags: 
+    - docker_storage
+
+- name: verify if Docker dir exists
+  stat: path=/var/lib/docker
+  register: var_docker_dir
+  tags:
+    - docker_storage
+
+- name: check if Docker directory has files
+  find: paths=/var/lib/docker file_type=directory patterns="*"
+  register: var_docker_dir_files
+  tags:
+    - docker_storage
+
+- debug: var=var_docker_dir
+  tags: debug
+
+- debug: var=var_docker_dir_files
+  tags: debug
+
+# - name: clear Docker backup directory
+#   file: 
+#     path: /var/lib/docker.bk
+#     state: absent
+#   when: var_docker_dir.stat.exists and var_docker_dir_files.matched|int != 0
+#   tags:
+#     - docker_storage
+
+# - name: create Docker backup directory
+#   file:
+#     path: /var/lib/docker.bk
+#     state: directory
+#     mode: 0600
+#     owner: root
+#     group: root
+#   when: var_docker_dir.stat.exists and var_docker_dir_files.matched|int != 0
+#   tags: 
+#     - docker_storage
+
+# - name: backup Docker directory before starts
+#   copy:
+#     src: /var/lib/docker/
+#     dest: /var/lib/docker.bk
+#   when: var_docker_dir.stat.exists and var_docker_dir_files.matched|int != 0
+#   tags:
+#     - docker_storage
+
+- name: delete all Docker directory contents
+  file: 
+    path: "{{ item.path }}"
+    state: absent
+  with_items:
+    - "{{ var_docker_dir_files.files }}"
+  tags:
+    - docker_storage
+
+- name: check if physical volume exists
+  command: pvdisplay
+  register: var_pvs
+  tags: docker_storage
+
+- debug: var=var_pvs
+  tags: debug
+
+- name: create the phisical volume
+  command: pvcreate "{{lvmDisk}}"
+  when: "lvmDisk not in var_pvs.stdout"
+  tags: docker_storage
+
+- name: create the volume group
+  lvg:
+    vg: "{{lvmGroup}}"
+    pvs: "{{lvmDisk}}"
+    state: present
+  tags: docker_storage
+
+- name: check if logical volume exists
+  command: lvdisplay
+  register: var_lvs
+  tags: docker_storage
+
+- debug: var=var_lvs
+  tags: debug
+
+- name: create the logical volume
+  lvol:
+    vg: "{{lvmGroup}}"
+    lv: "{{lvmVolume}}"
+    size: 100%VG
+    state: present
+  when: "lvmVolume not in var_lvs.stdout"
+  tags: docker_storage
+
+- name: Ensure monitoring of the logical volume is enabled.
+  command: lvchange --monitor y "{{lvmGroup}}/{{lvmVolume}}"
+  tags: docker_lvm
+
+- name: create a xfs filesystem
+  filesystem:
+    fstype: "{{dkr_storagefs}}"
+    dev: "/dev/mapper/{{lvmGroup}}-{{lvmVolume}}"
+  tags:
+    - docker_storage
+
+- name: mount the filesystem
+  mount:
+    path: "{{lvmMountPoint}}"
+    src: "/dev/mapper/{{lvmGroup}}-{{lvmVolume}}"
+    fstype: "{{dkr_storagefs}}"
+    opts: defaults
+    state: mounted
+  tags:
+    - docker_storage
+
+- name: create Docker config directory
+  file:
+    path: /etc/docker
+    state: directory
+    mode: 0600
+    owner: root
+    group: root
+  tags: docker_storage
+
+- name: Edit /etc/docker/daemon.json and configure the options
+  template: 
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    mode: 0644
+    backup: yes
+    force: yes
+  tags:
+    - docker_storage

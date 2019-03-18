@@ -2,30 +2,36 @@
 # tasks file for docker-direct-lvm
 # For more info: https://docs.docker.com/storage/storagedriver/device-mapper-driver/#configure-direct-lvm-mode-manually
 
+- name: If Docker running, stop the service
+  systemd:
+    name: docker
+    state: stopped
+  tags: docker_lvm
+
 - name: check if physical volume exists
   command: pvdisplay
   register: var_pvs
-  tags: lvm
+  tags: docker_lvm
 
 - name: create the phisical volume
   command: pvcreate "{{lvmDisk}}"
   when: "lvmDisk not in var_pvs.stdout"
-  tags: lvm
+  tags: docker_lvm
 
 - name: create the volume group
   lvg:
     vg: docker
     pvs: "{{lvmDisk}}"
     state: present
-  tags: lvm
+  tags: docker_lvm
 
 - name: check if logical volume exists
   command: lvdisplay
   register: var_lvs
-  tags: lvm
+  tags: docker_lvm
 
 - debug: var=var_lvs
-  tags: lvm
+  tags: docker_lvm
 
 - name: create the logical volume "tpvolume"
   lvol:
@@ -35,7 +41,7 @@
     opts: --wipesignatures y
     state: present
   when: "'tpvolume' not in var_lvs.stdout"
-  tags: lvm
+  tags: docker_lvm
 
 - name: create the logical volume "tpmeta"
   lvol: 
@@ -45,22 +51,29 @@
     opts: --wipesignatures y
     state: present
   when: "'tpmeta' not in var_lvs.stdout"
-  tags: lvm
+  tags: docker_lvm
 
 #- name: Make sure test thin pool does not exist (delete if exists)
 #  lvol:
 #    vg: docker
-#    lv: tpvolume
+#    lv: thinpool
 #    state: absent
 #    force: yes
+#  tags: docker_lvm
+#
+#- name: create a thin pool
+#  lvol:
+#    vg: docker
+#    thinpool: thinpool
+##    opts: --poolmetadata docker/tpmeta
+#    force: no
+#  tags: docker_lvm
 
-- name: create a thin pool
-  lvol:
-    vg: docker
-    thinpool: tpvolume
-    opts: --poolmetadata docker/tpmeta
-    force: no
-  tags: lvm
+- name: Convert volume to a thin pool
+  command: lvconvert -y --zero n -c 512K --thinpool docker/tpvolume --poolmetadata docker/tpmeta
+  ignore_errors: true
+  tags:
+    - docker_lvm
 
 - name: configure autoextension of thin pools via an lvm profile
   copy:
@@ -71,15 +84,15 @@
         thin_pool_autoextend_percent=20
       }
     force: no
-  tags: lvm
+  tags: docker_lvm
 
 - name: Apply the LVM profile
   command: lvchange --metadataprofile docker-thinpool docker/tpvolume
-  tags: lvm
+  tags: docker_lvm
 
 - name: Ensure monitoring of the logical volume is enabled.
   command: lvchange --monitor y docker/tpvolume
-  tags: lvm
+  tags: docker_lvm
 
 - name: create config dir
   file:
@@ -88,7 +101,7 @@
     mode: 0600
     owner: root
     group: root
-  tags: lvm
+  tags: docker_lvm
 
 #- name: Edit /etc/docker/daemon.json and configure the options
 #  copy: 
@@ -103,7 +116,7 @@
 #        ]
 #      }
 #    force: yes
-#  tags: lvm
+#  tags: docker_lvm
 
 - name: Edit /etc/docker/daemon.json and configure the options
   template: 
@@ -113,4 +126,16 @@
     backup: yes
     force: yes
   tags:
-    - lvm
+    - docker_lvm
+
+- name: verify if Docker dir exists
+  stat: path=/var/lib/docker
+  register: var_docker_dir
+  tags:
+    - docker_lvm
+
+- name: clean (backup) Docker directory before starts
+  command: mkdir -f /var/lib/docker.bk && mv /var/lib/docker/* /var/lib/docker.bk
+  when: var_docker_dir.stat.exists
+  tags:
+    - docker_lvm

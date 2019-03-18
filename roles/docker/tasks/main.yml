@@ -10,13 +10,15 @@
         - yum-utils
         - device-mapper-persistent-data
         - lvm2
+        - python-docker-py
     tags:
       - requisites
 
   - name: start cntlm
     command: systemctl start cntlm
+    when: enableproxy
     tags: 
-      - requisites
+      - proxy
 
   - name: install docker-ce repo
     command: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
@@ -45,5 +47,6 @@
 
   - name: stop cntlm
     command: systemctl stop cntlm
+    when: enableproxy
     tags: 
       - requisites

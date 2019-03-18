@@ -1,2 +1,5 @@
 ---
 # handlers file for config
+- name: reboot server
+  reboot:
+    test_command: mount

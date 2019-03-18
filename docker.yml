@@ -1,7 +1,9 @@
 ---
   - hosts: docker
     become: true
-    gather_facts: false
+    gather_facts: true
     roles:
+    - config
     - docker
-    - docker-direct-lvm
+    - docker-overlay2
+    - docker-service
