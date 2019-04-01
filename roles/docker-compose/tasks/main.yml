@@ -1,0 +1,83 @@
+---
+# tasks file for docker-compose
+
+- block:
+
+  - name: check if docker is present
+    service_facts:
+
+  - name: fail if docker is not present
+    fail:
+      msg: "Docker is requisite to install Docker Compose."
+    when: "'docker.service' not in ansible_facts.services"
+
+  - name: enable proxy
+    systemd:
+      name: cntlm
+      state: started
+    changed_when: false
+    when: enableproxy
+
+  - name: uninstall compose if it is installed (local user)
+    file:
+      dest: /usr/local/bin/docker-compose
+      state: absent
+    changed_when: false
+
+  - name: uninstall compose if it is installed (system wide)
+    file:
+      dest: /usr/bin/docker-compose
+      state: absent
+    changed_when: false
+
+  - name: get OS version to fill download URL
+    shell: echo "$(uname -s)-$(uname -m)"
+    register: os_version
+    changed_when: "'Linux' not in os_version.stdout"
+    failed_when: "'Linux' not in os_version.stdout"
+
+  - name: download latest version of docker compose
+    get_url:
+      url: "https://github.com/docker/compose/releases/download/{{dkr_composeversion}}/docker-compose-{{os_version.stdout}}"
+      dest: /usr/local/bin/docker-compose
+      force: yes
+      owner: root
+      mode: u=rwx,g=rx,o=rx
+    changed_when: false
+
+  - name: install for all users
+    file: 
+      src: /usr/local/bin/docker-compose
+      dest: /usr/bin/docker-compose 
+      state: link
+    changed_when: false
+
+  - name: install command-line completion
+    get_url:
+      url: "https://raw.githubusercontent.com/docker/compose/{{dkr_composeversion}}/contrib/completion/bash/docker-compose"
+      dest: /etc/bash_completion.d/docker-compose
+      force: yes
+      owner: root
+      mode: u=rwx,g=rx,o=rx
+    changed_when: false
+
+  - name: stop proxy
+    systemd:
+      name: cntlm
+      state: stopped
+    changed_when: false
+    when: enableproxy
+
+  - name: test docker compose installation
+    shell: docker-compose --version
+    register: compose_test
+    changed_when: "'build' not in compose_test.stdout"
+    failed_when: "'build' not in compose_test.stdout"
+
+  - name: check the results of compose installation test
+    fail:
+      msg: "Docker compose not installed properly."
+    when: "'build' not in compose_test.stdout"
+
+  tags:
+    - docker_compose

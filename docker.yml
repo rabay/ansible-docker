@@ -3,7 +3,10 @@
     become: true
     gather_facts: true
     roles:
+    - cntlm
     - config
     - docker
     - docker-overlay2
     - docker-service
+    - docker-compose
+    - docker-stack

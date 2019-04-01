@@ -1,0 +1,71 @@
+---
+# tasks file for cntlm
+- name: Populate service facts
+  service_facts:
+
+- block:
+
+  - name: stop service cntlm, if exists and running
+    systemd:
+      name: cntlm
+      state: stopped
+    ignore_errors: true
+
+  - name: copy cntlm installer to machine
+    copy:
+      src: files/cntlm-0.92.3-1.x86_64.rpm
+      dest: /tmp/cntlm-0.92.3-1.x86_64.rpm
+      mode: u=rwx,g=rwx,o=rx
+      owner: root
+
+  - name: install cntlm
+    yum:
+      name: /tmp/cntlm-0.92.3-1.x86_64.rpm
+      state: present
+
+  - name: create PID directory with correct permissions
+    file:
+      path: /var/run/cntlm
+      state: directory
+      owner: cntlm
+      group: cntlm
+      mode: u=rwx,g=rwx,o=rx
+      recurse: yes
+      force: yes
+    changed_when: false
+
+  - name: program for recreate PID dir afeter a reboot
+    copy:
+      dest: /usr/lib/tmpfiles.d/cntlm.conf
+      content: |
+        d /var/run/cntlm   700 cntlm cntlm
+      owner: root
+      group: root
+      force: yes
+
+  - name: configure proxy environment variables
+    copy: 
+      dest: "/etc/profile.d/proxy.sh"
+      mode: 0774
+      owner: root
+      group: root
+      content: |
+        export http_proxy=http://127.0.0.1:3128
+        export https_proxy=$http_proxy
+        no_proxy=vm-centos-7-*,192.168.235.100,192.168.235.101,192.168.235.102,192.168.235.103,192.168.235.104,192.168.235.105,192.168.235.106,192.168.235.107,192.168.235.108,192.168.235.109,192.168.235.110,192.168.235.111,192.168.235.112,192.168.235.113,192.168.235.114,192.168.235.115,192.168.235.116,192.168.235.117,192.168.235.118,192.168.235.119,192.168.235.120,192.168.235.121,192.168.235.122,192.168.235.123,192.168.235.124,192.168.235.125,192.168.235.126,192.168.235.127,192.168.235.128,192.168.235.129,192.168.235.130,192.168.235.131,192.168.235.132,192.168.235.133,192.168.235.134,192.168.235.135,192.168.235.136,192.168.235.137,192.168.235.138,192.168.235.139,192.168.235.140,192.168.235.141,192.168.235.142,192.168.235.143,192.168.235.144,192.168.235.145,192.168.235.146,192.168.235.147,192.168.235.148,192.168.235.149,192.168.235.150,127.0.0.1,localhost,scopus.com.br
+      force: no
+
+  - name: copy config file template and apply variables
+    template: 
+      src: cntlm.conf.j2
+      dest: /etc/cntlm.conf
+      mode: 0644
+      backup: yes
+      force: yes
+    when: enableproxy
+    tags:
+      - cntlm
+  
+  when: enableproxy
+  tags:
+    - cntlm

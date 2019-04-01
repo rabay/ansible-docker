@@ -1,9 +1,28 @@
 ---
+#global
+ansible_shell_type: "sh"
+
+#lvm
 lvmDisk: "/dev/sdb"
 lvmGroup: "vg_docker"
 lvmVolume: "vol_docker"
 lvmMountPoint: "/var/lib/docker"
-enableproxy: "true"
+
+#proxy
+enableproxy: true
+prx_username: "vrabay"
+prx_domain: "scopus.com.br"
+prx_hash: "3B07AE5E84004E2754AAF8FD911DE714"
+prx_address: "iwacorp.scopus.com.br"
+prx_port: "80"
+prx_workstation: "SCPWSOL103576"
+prx_noproxy: "localhost, 127.0.0.*, 10.*, 192.168.*, 172.*, *.scopus.com.br, *.pocdevops.com"
+prx_listenip: 0.0.0.0
+prx_listenport: 3128
+prx_gateway: "yes"
+
+#docker daemon
+dkr_composeversion: "1.23.2"
 dkr_selinuxenabled: "false"
 dkr_enabledebug: "true"
 dkr_enabletls: "false"
@@ -16,6 +35,17 @@ dkr_loglevel: "debug"
 dkr_logmaxsize: "10m"
 dkr_maxfile: "3"
 
+#docker
+dkr_host: "unix://var/run/docker.sock"
+dkr_tls: no
+dkr_host_binding_ipv4: "0.0.0.0"
+dkr_ignore_image: yes
+dkr_enableproxy: true
+dkr_httpproxy: "http://127.0.0.1:3128"
+dkr_httpsproxy: "http://127.0.0.1:3128"
+dkr_noproxy: "localhost,127.0.0.1"
+dkr_listenip: "0.0.0.0"
+dkr_listenport: "2375"
 ######## STORAGE devicemapper config ########
 #dkr_storagedriver: "devicemapper"
 #dkr_storagefs: "xfs"
@@ -23,7 +53,6 @@ dkr_maxfile: "3"
 #dkr_defremoval: true
 #dkr_defdel: true
 #############################################
-
 ########## STORAGE overlay2 config ##########
 dkr_storagedriver: "overlay2"
 dkr_storagefs: "xfs"
@@ -32,9 +61,43 @@ dkr_defremoval: ""
 dkr_defdel: ""
 #############################################
 
-dkr_enableproxy: true
-dkr_httpproxy: "http://127.0.0.1:3128"
-dkr_httpsproxy: "http://127.0.0.1:3128"
-dkr_noproxy: "localhost,127.0.0.1"
-dkr_listenip: "0.0.0.0"
-dkr_listenport: "2375"
+#mariadb
+msql_port: "3306"
+msql_socket: "/run/mysqld/mysqld.sock"
+msql_storageengine: "innodb"
+msql_tmpdir: "tmpdir"
+msql_root_passwd: "Scopus2019"
+msql_db: "limesurvey"
+msql_user: "limesurvey"
+msql_passwd: "Scopus2019"
+msql_root_host: "%"
+msql_log_console: "true"
+msql_backup: "files/mysql.bkp"
+msql_innodbbufferpoolsize: "64M"
+msql_joinbuffersize: "64M"
+msql_sortbuffersize: "2M"
+msql_readrndbuffersize: "2M"
+msql_logbin: "log_bin"
+msql_skiphostcache: "skip-host-cache"
+msql_skipnameresolve: "skip-name-resolve"
+msql_logerror: "/var/log/mysqld.log"
+msql_exec_user: "root"
+
+#limesurvey
+lms_version: "3.15.5"
+lms_exec_user: "root"
+lms_buildargs_http_proxy: "http://{{ ansible_eth0.ipv4.address }}:3128"
+lms_virtualhost: "survey.scopus.com.br"
+lms_virtualport: "80"
+lms_httpsmethod: "nohttps"
+lms_dbtype: "mysql"
+lms_dbhost: "mariadb"
+lms_dbport: "3306"
+lms_dbname: "limesurvey"
+lms_dbtableprefix: "lime_"
+lms_dbuser: "limesurvey"
+lms_dbpasswd: "Scopus2019"
+lms_adminuser: "admin"
+lms_adminname: "Administrator"
+lms_adminemail: "vrabay@scopus.com.br"
+lms_adminpasswd: "Scopus2019"

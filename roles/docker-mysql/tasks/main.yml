@@ -1,0 +1,57 @@
+---
+# tasks file for docker-mysql
+- name: create data dir for mysql
+  file:
+    path: /opt/docker/mysql/data
+    state: directory
+    owner: root
+    group: docker
+    mode: "u=rwx,g=rw,o=rw"
+
+- name: create config dir for mysql
+  file:
+    path: /opt/docker/mysql/logs
+    state: directory
+    owner: root
+    group: docker
+    mode: "u=rwx,g=rw,o=rw"
+
+- name: create backup dir for mysql
+  file:
+    path: /opt/docker/mysql/backup
+    state: directory
+    owner: root
+    group: docker
+    mode: "u=rwx,g=rw,o=rw"
+
+- name: create restore dir for mysql
+  file:
+    path: /opt/docker/mysql/restore
+    state: directory
+    owner: root
+    group: docker
+    mode: "u=rwx,g=rw,o=rw"
+
+- name: define config file for mysql
+  template: 
+    src: my.cnf.j2
+    dest: /etc/my.cnf
+    mode: 0644
+    backup: yes
+    force: yes
+  tags:
+    - docker_mysql_cnf
+
+# - name: check if backup file is present to restore
+#   local_action: stat path="/opt/docker/mysql/restore/{{msql_backup}}"
+#   resgister: has_backup
+
+# - name: restore backup
+#   when: has_backup.stat.exists
+
+# - name: start the mysql container
+#   docker_container:
+#     name: mysql
+#     image: mysql/mysql-server:5.7.24
+#     volumes:
+#       - 

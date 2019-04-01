@@ -1,0 +1,203 @@
+---
+# tasks file for docker-stack
+
+- block:
+
+  - name: start cntlm
+    systemd:
+      name: cntlm
+      state: started
+    changed_when: false
+    when: enableproxy
+
+  - name: Create a network for application
+    docker_network:
+      docker_host: "{{ dkr_host }}"
+      tls: "{{ dkr_tls }}"
+      name: app_nw
+      state: present
+      driver_options:
+        com.docker.network.bridge.host_binding_ipv4: "{{ dkr_host_binding_ipv4 }}"
+        com.docker.network.bridge.enable_icc: true
+      ipam_options:
+        subnet: '172.20.0.0/16'
+        gateway: '172.20.0.1'
+    register: app_nw
+
+  - name: Create a network for database
+    docker_network:
+      docker_host: "{{ dkr_host }}"
+      tls: "{{ dkr_tls }}"
+      name: db_nw
+      state: present
+      driver_options:
+        com.docker.network.bridge.host_binding_ipv4: "{{ dkr_host_binding_ipv4 }}"
+        com.docker.network.bridge.enable_icc: true
+      ipam_options:
+        subnet: '172.30.0.0/16'
+        gateway: '172.30.0.1'
+    register: db_nw
+
+  - name: create db and app directories
+    file:
+      path: "{{ item }}"
+      state: directory
+      mode: "u=rwx,g=rwx,o=rwx"
+      owner: "1000"
+      group: "1000"
+    with_items:
+      - /opt/mariadb/conf
+      - /opt/mariadb/conf.d
+      - /opt/mariadb/data
+      - /opt/mariadb/logs
+      - /opt/mariadb/dumps
+      - /opt/limesurvey/conf
+      - /opt/limesurvey/upload
+
+  - name: create the my.cnf file for mariadb
+    template:
+      src: mysql_my.cnf.j2
+      dest: /opt/mariadb/conf/my.cnf
+      mode: 0666
+      backup: no
+      force: yes
+
+  - name: Create db container and connect to network
+    docker_container:
+      docker_host: "{{ dkr_host }}"
+      state: started
+      name: mariadb
+      image: "yobasystems/alpine-mariadb:latest"
+      ignore_image: "{{ dkr_ignore_image }}"
+      hostname: mariadb
+      restart_policy: always
+      user: "{{ msql_exec_user }}"
+      command: "--character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci"
+      networks:
+        - name: "db_nw"
+      etc_hosts:
+        smtp.pocdevops.com: "{{ db_nw.ansible_facts.docker_network.IPAM.Config[0].Gateway }}"
+        dockerhost: "{{ db_nw.ansible_facts.docker_network.IPAM.Config[0].Gateway }}"
+      ports:
+        - "0.0.0.0:{{ msql_port }}:{{ msql_port }}"
+      volumes:
+        - "/opt/mariadb/conf/my.cnf:/etc/mysql/my.cnf:rw"
+        - "/opt/mariadb/conf.d:/etc/mysql/conf.d:rw"
+        - "/opt/mariadb/data:/var/lib/mysql:rw"
+        - "/opt/mariadb/dumps:/tmp/dumps:rw"
+        - "/opt/mariadb/logs:/var/lib/mysql/mysql-bin:rw"
+      env:
+        MYSQL_ROOT_PASSWORD: "{{ msql_root_passwd }}"
+        MYSQL_DATABASE: "{{ msql_db }}"
+        MYSQL_USER: "{{ msql_user }}"
+        MYSQL_PASSWORD: "{{ msql_passwd }}"
+        MYSQL_ROOT_HOST: "{{ msql_root_host }}"
+        MYSQL_LOG_CONSOLE: "{{ msql_log_console }}"
+    register: db_container
+
+  - name: copy dump file to docker host 
+    copy:
+      src: files/limesurvey_dump_2019-04-01.sql
+      dest: /opt/mariadb/dumps
+      mode: 0666
+
+  - name: wait db container starts before restore de dump
+    wait_for:
+      host: "{{ db_container.ansible_facts.docker_container.NetworkSettings.IPAddress }}"
+      port: 3306
+  
+  - name: restore dump database
+    mysql_db:
+      name: limesurvey
+      state: import
+      target: /opt/mariadb/dumps/limesurvey_dump_2019-04-01.sql
+      login_host: "{{ ansible_eth0.ipv4.address }}"
+      login_user: "root"
+      login_password: "{{ msql_root_passwd }}"
+      encoding: "utf8mb4_unicode_ci"
+
+  - name: upload limesurvey files to docker host
+    synchronize: 
+      src: files/limesurvey
+      dest: /tmp/
+  
+  - name: recover "upload" folder on docker host
+    unarchive:
+      src: files/limesurvey-uploads.tar.gz
+      dest: /opt/limesurvey/upload
+
+  - name: build limesurvey image
+    docker_image:
+      docker_host: "{{ dkr_host }}"
+      state: present
+      path: /tmp/limesurvey/
+      name: scopus.com.br/limesurvey
+      tag: "{{ lms_version }}"
+      push: no
+      pull: yes
+      buildargs:
+        http_proxy: "{{ lms_buildargs_http_proxy }}"
+        https_proxy: "{{ lms_buildargs_http_proxy }}"
+        version: "{{ lms_version }}"
+
+  - name: create the config.php file for limesurvey
+    template:
+      src: lms_config.php.j2
+      dest: /opt/limesurvey/conf/config.php
+      mode: 0666
+      backup: yes
+      force: yes
+
+  - name: Create limesurvey container and connect to network
+    docker_container:
+      docker_host: "{{ dkr_host }}"
+      state: started
+      name: limesurvey
+      image: "scopus.com.br/limesurvey:{{ lms_version }}"
+      ignore_image: "{{ dkr_ignore_image }}"
+      hostname: limesurvey
+      restart_policy: always
+      user: "{{ lms_exec_user }}"
+      networks:
+        - name: "app_nw"
+        - name: "db_nw"
+      etc_hosts:
+        smtp.pocdevops.com: "{{ app_nw.ansible_facts.docker_network.IPAM.Config[0].Gateway }}"
+        dockerhost: "{{ app_nw.ansible_facts.docker_network.IPAM.Config[0].Gateway }}"
+      ports:
+        - "0.0.0.0:80:80"
+      volumes:
+        - "/opt/limesurvey/conf/config.php:/var/www/html/application/config/config.php:ro"
+        - "/opt/limesurvey/upload:/var/www/html/upload:rw"
+      env:
+        VIRTUAL_HOST: "{{ lms_virtualhost }}"
+        VIRTUAL_PORT: "{{ lms_virtualport }}"
+        HTTPS_METHOD: "{{ lms_httpsmethod }}"
+        http_proxy: http://dockerhost:3128
+        https_proxy: http://dockerhost:3128
+        DB_TYPE: "{{ lms_dbtype }}"
+        DB_HOST: "{{ lms_dbhost }}"
+        DB_PORT: "{{ lms_dbport }}"
+        DB_NAME: "{{ lms_dbname }}"
+        DB_TABLE_PREFIX: "{{ lms_dbtableprefix }}"
+        DB_USERNAME: "{{ lms_dbuser }}"
+        DB_PASSWORD: "{{ lms_dbpasswd }}"
+        ADMIN_USER: "{{ lms_adminuser }}"
+        ADMIN_NAME: "{{ lms_adminname }}"
+        ADMIN_EMAIL: "{{ lms_adminemail }}"
+        ADMIN_PASSWORD: "{{ lms_adminpasswd }}"
+
+  always: #main block
+    - name: delete limesurvey files from docker host
+      file:
+        path: /tmp/limesurvey
+        state: absent
+    - name: stop cntlm
+      systemd:
+        name: cntlm
+        state: stopped
+      changed_when: false
+      when: enableproxy
+  
+  tags: #main block
+    - docker_stack

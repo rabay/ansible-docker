@@ -1,0 +1,15 @@
+{
+  "debug": {{ dkr_enabledebug }},
+  "selinux-enabled": {{ dkr_selinuxenabled }},
+  "tls": {{ dkr_enabletls }},
+  {% if dkr_enabletls is sameas true %}
+  "tlscacert": "{{ dkr_tlscacertpath }}",
+  "tlscert": "{{ dkr_tlscertpath }}",
+  "tlskey": "{{ dkr_tlskeypath }}",
+  "tlsverify": {{ dkr_tlsverify }}
+  {% endif %}
+  "log-driver": "{{ dkr_logdriver }}",
+  "log-level": "{{ dkr_loglevel }}",
+  "log-opts": {"max-size": "{{ dkr_logmaxsize }}", "max-file": "{{ dkr_maxfile }}"},
+  "storage-driver": "{{ dkr_storagedriver }}"
+}

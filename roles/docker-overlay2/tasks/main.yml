@@ -1,140 +1,103 @@
 ---
 # tasks file for docker-overlay2
 # READ MORE: https://docs.docker.com/storage/storagedriver/overlayfs-driver/
-- name: if Docker running, stop the service
-  systemd:
-    name: docker
-    state: stopped
-  tags: 
-    - docker_storage
 
-- name: verify if Docker dir exists
-  stat: path=/var/lib/docker
-  register: var_docker_dir
-  tags:
-    - docker_storage
+- block: #initial block
 
-- name: check if Docker directory has files
-  find: paths=/var/lib/docker file_type=directory patterns="*"
-  register: var_docker_dir_files
-  tags:
-    - docker_storage
+  - name: if Docker running, stop the service
+    systemd:
+      name: docker
+      state: stopped
+    changed_when: false
 
-- debug: var=var_docker_dir
-  tags: debug
+  - name: check if physical volume exists
+    command: pvdisplay
+    register: var_pvs
+    changed_when: false
 
-- debug: var=var_docker_dir_files
-  tags: debug
+  - block: #physical volume block
+    - name: create the physical volume
+      command: pvcreate "{{lvmDisk}}"
 
-# - name: clear Docker backup directory
-#   file: 
-#     path: /var/lib/docker.bk
-#     state: absent
-#   when: var_docker_dir.stat.exists and var_docker_dir_files.matched|int != 0
-#   tags:
-#     - docker_storage
+    - name: create the volume group
+      lvg:
+        vg: "{{lvmGroup}}"
+        pvs: "{{lvmDisk}}"
+        state: present
 
-# - name: create Docker backup directory
-#   file:
-#     path: /var/lib/docker.bk
-#     state: directory
-#     mode: 0600
-#     owner: root
-#     group: root
-#   when: var_docker_dir.stat.exists and var_docker_dir_files.matched|int != 0
-#   tags: 
-#     - docker_storage
+    - name: check if logical volume exists
+      command: lvdisplay
+      changed_when: false
+      register: var_lvs
+    
+    - debug: var=var_lvs.stdout
 
-# - name: backup Docker directory before starts
-#   copy:
-#     src: /var/lib/docker/
-#     dest: /var/lib/docker.bk
-#   when: var_docker_dir.stat.exists and var_docker_dir_files.matched|int != 0
-#   tags:
-#     - docker_storage
+    - block: #logical volume block
+      - name: create the logical volume
+        lvol:
+          vg: "{{lvmGroup}}"
+          lv: "{{lvmVolume}}"
+          size: 100%VG
+          state: present
 
-- name: delete all Docker directory contents
-  file: 
-    path: "{{ item.path }}"
-    state: absent
-  with_items:
-    - "{{ var_docker_dir_files.files }}"
-  tags:
-    - docker_storage
+      - name: Ensure monitoring of the logical volume is enabled.
+        command: lvchange --monitor y "{{lvmGroup}}/{{lvmVolume}}"
 
-- name: check if physical volume exists
-  command: pvdisplay
-  register: var_pvs
-  tags: docker_storage
+      - name: create a xfs filesystem
+        filesystem:
+          fstype: "{{dkr_storagefs}}"
+          dev: "/dev/mapper/{{lvmGroup}}-{{lvmVolume}}"
 
-- debug: var=var_pvs
-  tags: debug
+      - name: list all mounted points in system
+        command: mount
+        args:
+          warn: false
+        register: mounted_points
+        changed_when: false
 
-- name: create the phisical volume
-  command: pvcreate "{{lvmDisk}}"
-  when: "lvmDisk not in var_pvs.stdout"
-  tags: docker_storage
+      - debug: var=mounted_points
 
-- name: create the volume group
-  lvg:
-    vg: "{{lvmGroup}}"
-    pvs: "{{lvmDisk}}"
-    state: present
-  tags: docker_storage
+      - name: check if dir is already a mount point
+        fail:
+          msg: "'lvmMountPoint' is already used as a mount point."
+        when: "'lvmMountPoint' in mounted_points.stdout"
 
-- name: check if logical volume exists
-  command: lvdisplay
-  register: var_lvs
-  tags: docker_storage
+      - name: mount the filesystem
+        mount:
+          path: "{{lvmMountPoint}}"
+          src: "/dev/mapper/{{lvmGroup}}-{{lvmVolume}}"
+          fstype: "{{dkr_storagefs}}"
+          opts: defaults
+          state: mounted
 
-- debug: var=var_lvs
-  tags: debug
+      - name: verify if Docker dir exists
+        stat: path=/var/lib/docker
+        register: var_docker_dir
 
-- name: create the logical volume
-  lvol:
-    vg: "{{lvmGroup}}"
-    lv: "{{lvmVolume}}"
-    size: 100%VG
-    state: present
-  when: "lvmVolume not in var_lvs.stdout"
-  tags: docker_storage
+      - name: check if Docker directory has files
+        find: paths=/var/lib/docker file_type=directory patterns="*"
+        register: var_docker_dir_files
 
-- name: Ensure monitoring of the logical volume is enabled.
-  command: lvchange --monitor y "{{lvmGroup}}/{{lvmVolume}}"
-  tags: docker_lvm
+      - name: delete all Docker directory contents
+        file: 
+          path: "{{ item.path }}"
+          state: absent
+        with_items:
+          - "{{ var_docker_dir_files.files }}"
 
-- name: create a xfs filesystem
-  filesystem:
-    fstype: "{{dkr_storagefs}}"
-    dev: "/dev/mapper/{{lvmGroup}}-{{lvmVolume}}"
-  tags:
-    - docker_storage
+      when: "lvmVolume not in var_lvs.stdout" #logical volume block
 
-- name: mount the filesystem
-  mount:
-    path: "{{lvmMountPoint}}"
-    src: "/dev/mapper/{{lvmGroup}}-{{lvmVolume}}"
-    fstype: "{{dkr_storagefs}}"
-    opts: defaults
-    state: mounted
-  tags:
-    - docker_storage
+    - name: fail if logical volume alredy exists
+      fail:
+        msg: "The logical volume {{lvmVolume}} already exists."
+      when: "lvmVolume in var_lvs.stdout"
 
-- name: create Docker config directory
-  file:
-    path: /etc/docker
-    state: directory
-    mode: 0600
-    owner: root
-    group: root
-  tags: docker_storage
+    when: "lvmDisk not in var_pvs.stdout" #physical volume block
 
-- name: Edit /etc/docker/daemon.json and configure the options
-  template: 
-    src: daemon.json.j2
-    dest: /etc/docker/daemon.json
-    mode: 0644
-    backup: yes
-    force: yes
-  tags:
+  - name: fail if physical volume alredy exists
+    fail:
+      msg: "The physical volume {{lvmDisk}} already exists."
+    when: "lvmDisk in var_pvs.stdout"
+
+  tags: #initial block
     - docker_storage

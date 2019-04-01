@@ -1,0 +1,15 @@
+[mysqld]
+innodb_buffer_pool_size = {{msql_innodbbufferpoolsize}}
+{{msql_logbin}}
+{{msql_skiphostcache}}
+{{msql_skipnameresolve}}
+join_buffer_size = {{msql_joinbuffersize}}
+sort_buffer_size = {{msql_sortbuffersize}}
+read_rnd_buffer_size = {{msql_readrndbuffersize}}
+datadir=/var/lib/mysql
+socket=/var/lib/mysql/mysql.sock
+secure-file-priv=/var/lib/mysql-files
+user=mysql
+symbolic-links=0
+log-error={{msql_logerror}}
+pid-file=/var/run/mysqld/mysqld.pid

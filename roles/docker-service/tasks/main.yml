@@ -31,41 +31,62 @@
   tags:
     - docker_service
 
+- name: create Docker config directory
+  file:
+    path: /etc/docker
+    state: directory
+    mode: 0600
+    owner: root
+    group: root
+  tags:
+    - docker_service
+
+- name: Edit /etc/docker/daemon.json and configure the options
+  template: 
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    mode: 0644
+    backup: yes
+    force: yes
+  tags:
+    - docker_service
+
 - name: Reload daemon, enable and start Docker service
   systemd:
     name: docker
     state: started
     daemon_reload: yes
     enabled: yes
+  changed_when: false
   tags:
     - docker_service
 
 - name: start cntlm
   command: systemctl start cntlm
   when: enableproxy
+  changed_when: false
   tags:
     - docker_service
-    - proxy
 
 - name: Test Docker installation and configuration
   docker_container:
     name: hello-world-test
     image: hello-world
+  changed_when: false
   tags:
     - docker_service
-    - docker-test
 
 - name: Stop and remove test container
   docker_container:
     name: hello-world-test
     state: absent
+  changed_when: false
   tags:
     - docker_service
-    - docker-test
 
 - name: stop cntlm
   command: systemctl stop cntlm
   when: enableproxy
+  changed_when: false
   tags:
     - docker_service
-    - proxy
