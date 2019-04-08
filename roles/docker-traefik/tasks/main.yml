@@ -1,0 +1,79 @@
+---
+# tasks file for docker-traefik
+
+- block:
+
+  - name: start cntlm
+    systemd:
+      name: cntlm
+      state: started
+    changed_when: false
+    when: enableproxy
+
+  - name: create directory for traefik configuration
+    file:
+      path: /opt/traefik/conf
+      state: directory
+      mode: "u=rwx,g=rwx,o=rwx"
+      owner: "1000"
+      group: "1000"
+
+  - name: create directory for certs files
+    file:
+      path: /opt/traefik/certs
+      state: directory
+      mode: "u=rwx,g=rwx,o=rwx"
+      owner: "1000"
+      group: "1000"
+
+
+  - name: create the traefik.toml file for traefik
+    template:
+      src: traefik.toml.j2
+      dest: /opt/traefik/conf/traefik.toml
+      mode: 0666
+      backup: no
+      force: yes
+
+  - name: copy survey.scopus.com.br cert to docker host
+    copy:
+      src: files/certs/
+      dest: /opt/traefik/certs
+      force: yes
+      mode: 0666
+
+  - name: create traefik container
+    docker_container:
+      docker_host: "{{ dkr_host }}"
+      name: "traefik"
+      state: started
+      image: "traefik:alpine"
+      hostname: "traefik"
+      restart_policy: always
+      recreate: yes
+      ports:
+        - "80:80"
+        - "443:443"
+      exposed_ports:
+        - "8080:8080"
+      labels:
+        traefik.enable: "true"
+        traefik.frontend.rule: "Host:traefik.scopus.com.br"
+        traefik.port: "8080"
+        traefik.docker.network: "bridge"
+      volumes:
+        - "/var/run/docker.sock:/var/run/docker.sock"
+        - "/opt/traefik/conf:/etc/traefik"
+        - "/opt/traefik/certs:/certs"
+    notify: restart traefik
+
+  always: #main block
+    - name: stop cntlm
+      systemd:
+        name: cntlm
+        state: stopped
+      changed_when: false
+      when: enableproxy
+  
+  tags: #main block
+    - docker_traefik

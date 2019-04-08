@@ -1,0 +1,19 @@
+defaultEntryPoints = ["http","https"]
+
+[entryPoints]
+  [entryPoints.http]
+  address = ":80"
+  [entryPoints.https]
+  address = ":443"
+    [entryPoints.https.tls]
+      [[entryPoints.https.tls.certificates]]
+      certFile = "/certs/cert.crt"
+      keyFile  = "/certs/cert.key"
+
+[api]
+
+[docker]
+endpoint = "unix:///var/run/docker.sock"
+domain = "scopus.com.br"
+exposedByDefault = false
+watch = true

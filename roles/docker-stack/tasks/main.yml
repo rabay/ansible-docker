@@ -53,6 +53,58 @@
       - /opt/mariadb/dumps
       - /opt/limesurvey/conf
       - /opt/limesurvey/upload
+      - /opt/portainer/data
+
+  - name: create portainer container for environment monitoring
+    docker_container:
+      docker_host: "{{ dkr_host }}"
+      state: started
+      name: portainer
+      image: portainer/portainer
+      ignore_image: "{{ dkr_ignore_image }}"
+      hostname: portainer
+      restart_policy: always
+      recreate: yes
+      command: "-H unix:///var/run/docker.sock"
+      ports:
+        - "0.0.0.0:9000:9000"
+      exposed_ports:
+        - "9000"
+      volumes:
+        - "/var/run/docker.sock:/var/run/docker.sock"
+        - "/opt/portainer/data:/data"
+      labels:
+        traefik.enable: "true"
+        traefik.frontend.rule: "Host:portainer.scopus.com.br"
+        traefik.port: "9000"
+        traefik.protocol: "http"
+        traefik.backend: "portainer"
+        traefik.docker.network: "bridge"
+
+  - name: create container of smtp relay service
+    docker_container:
+      docker_host: "{{ dkr_host }}"
+      state: started
+      name: smtprelay
+      image: turgon37/smtp-relay
+      ignore_image: "{{ dkr_ignore_image }}"
+      hostname: smtprelay
+      restart_policy: always
+      user: "{{ msql_exec_user }}"
+      networks:
+        - name: "app_nw"
+      ports:
+        - "0.0.0.0:25:25"
+      env:
+        RELAY_POSTMASTER: "arquitetura-servicos@scopus.com.br"
+        RELAY_MYHOSTNAME: "smtprelay"
+        RELAY_MYDOMAIN: "scopus.com.br"
+        RELAY_MYNETWORKS: "127.0.0.0/8 172.10.0.0/16 172.20.0.0/16 172.30.0.0/16 192.168.0.0/16"
+        RELAY_HOST: "[172.16.43.116]:25"
+        RELAY_DOMAINS: "scopus.com.br bradesco.com.br"
+        RELAY_USE_TLS: "no"
+        RELAY_MODE: "STRICT"
+    register: smtp_container
 
   - name: create the my.cnf file for mariadb
     template:
@@ -76,7 +128,6 @@
       networks:
         - name: "db_nw"
       etc_hosts:
-        smtp.pocdevops.com: "{{ db_nw.ansible_facts.docker_network.IPAM.Config[0].Gateway }}"
         dockerhost: "{{ db_nw.ansible_facts.docker_network.IPAM.Config[0].Gateway }}"
       ports:
         - "0.0.0.0:{{ msql_port }}:{{ msql_port }}"
@@ -97,7 +148,7 @@
 
   - name: copy dump file to docker host 
     copy:
-      src: files/limesurvey_dump_2019-04-01.sql
+      src: "files/{{ msql_dumpfile }}"
       dest: /opt/mariadb/dumps
       mode: 0666
 
@@ -110,11 +161,16 @@
     mysql_db:
       name: limesurvey
       state: import
-      target: /opt/mariadb/dumps/limesurvey_dump_2019-04-01.sql
+      target: "/opt/mariadb/dumps/{{ msql_dumpfile }}"
       login_host: "{{ ansible_eth0.ipv4.address }}"
       login_user: "root"
       login_password: "{{ msql_root_passwd }}"
       encoding: "utf8mb4_unicode_ci"
+
+  - name: erase dump file
+    file:
+      dest: "/opt/mariadb/dumps/{{ msql_dumpfile }}"
+      state: absent
 
   - name: upload limesurvey files to docker host
     synchronize: 
@@ -124,7 +180,10 @@
   - name: recover "upload" folder on docker host
     unarchive:
       src: files/limesurvey-uploads.tar.gz
-      dest: /opt/limesurvey/upload
+      dest: /opt/limesurvey
+      owner: root
+      group: root
+      mode: "u=rwx,g=rwx,o=rwx"
 
   - name: build limesurvey image
     docker_image:
@@ -158,21 +217,26 @@
       hostname: limesurvey
       restart_policy: always
       user: "{{ lms_exec_user }}"
+      recreate: yes
       networks:
         - name: "app_nw"
         - name: "db_nw"
       etc_hosts:
-        smtp.pocdevops.com: "{{ app_nw.ansible_facts.docker_network.IPAM.Config[0].Gateway }}"
         dockerhost: "{{ app_nw.ansible_facts.docker_network.IPAM.Config[0].Gateway }}"
       ports:
-        - "0.0.0.0:80:80"
+        - "8081:80"
+      exposed_ports:
+        - "80"
       volumes:
         - "/opt/limesurvey/conf/config.php:/var/www/html/application/config/config.php:ro"
         - "/opt/limesurvey/upload:/var/www/html/upload:rw"
+      labels:
+        traefik.enable: "true"
+        traefik.frontend.rule: "Host:survey.scopus.com.br"
+        traefik.port: "80"
+        traefik.protocol: "http"
+        traefik.docker.network: "bridge"
       env:
-        VIRTUAL_HOST: "{{ lms_virtualhost }}"
-        VIRTUAL_PORT: "{{ lms_virtualport }}"
-        HTTPS_METHOD: "{{ lms_httpsmethod }}"
         http_proxy: http://dockerhost:3128
         https_proxy: http://dockerhost:3128
         DB_TYPE: "{{ lms_dbtype }}"
@@ -186,6 +250,7 @@
         ADMIN_NAME: "{{ lms_adminname }}"
         ADMIN_EMAIL: "{{ lms_adminemail }}"
         ADMIN_PASSWORD: "{{ lms_adminpasswd }}"
+    notify: restart limesurvey
 
   always: #main block
     - name: delete limesurvey files from docker host

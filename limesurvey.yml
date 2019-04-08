@@ -1,0 +1,11 @@
+---
+  - hosts: docker
+    become: true
+    gather_facts: false
+
+    tasks:
+
+  - import_playbook: control.yml
+  - import_playbook: provision.yml
+  - import_playbook: docker-service.yml
+  - import_playbook: application.yml

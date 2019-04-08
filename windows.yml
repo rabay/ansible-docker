@@ -1,0 +1,22 @@
+---
+- hosts: windows
+  become: false
+  gather_facts: false
+  remote_user: "ansible"
+  vars:
+    ansible_shell_type: "powershell"
+    ansible_shell_executable: ""
+
+  tasks:
+    - name: display a message to logged users
+      win_msg:
+        display_seconds: 30
+        msg: "Apenas um teste..."
+
+    - name: execute ipconfig
+      win_shell: ipconfig
+      args:
+        executable: cmd.exe
+      register: ipc_win
+
+    - debug: var=ipc_win

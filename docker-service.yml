@@ -1,0 +1,9 @@
+---
+  - hosts: docker
+    become: true
+    gather_facts: false
+    roles:
+    - docker
+    - docker-overlay2
+    - docker-service
+    - docker-compose

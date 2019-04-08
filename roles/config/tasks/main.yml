@@ -98,6 +98,13 @@
       state: permissive
     notify: reboot server
 
+  - name: stop and disable postfix
+    systemd:
+      name: postfix
+      state: stopped
+      enabled: no
+    changed_when: false
+
   always: #config block
     - name: stop cntlm
       systemd:

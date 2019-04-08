@@ -30,7 +30,7 @@
       changed_when: false
       register: var_lvs
     
-    - debug: var=var_lvs.stdout
+    # - debug: var=var_lvs.stdout
 
     - block: #logical volume block
       - name: create the logical volume
@@ -55,7 +55,7 @@
         register: mounted_points
         changed_when: false
 
-      - debug: var=mounted_points
+      # - debug: var=mounted_points
 
       - name: check if dir is already a mount point
         fail:

@@ -24,6 +24,9 @@ RUN apt-get update && \
     libjpeg62-turbo-dev \
     libpng-dev \
     netcat \
+    iputils-ping \
+    net-tools \
+    telnet \
     && apt-get autoclean; apt-get autoremove && \
     rm -rf /var/lib/apt/lists/*
  

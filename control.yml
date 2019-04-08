@@ -1,0 +1,19 @@
+---
+  - hosts: control
+    become: true
+    gather_facts: false
+    tasks:
+      - name: install python2-winrm and ca-certificates
+        yum:
+          name: "{{ packages }}"
+          state: present
+          update_cache: no
+        vars:
+          packages:
+            - ca-certificates
+            - python2-winrm
+        tags:
+          - config
+    roles:
+    - cntlm
+    - config
