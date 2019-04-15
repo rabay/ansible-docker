@@ -152,7 +152,7 @@
       dest: /opt/mariadb/dumps
       mode: 0666
 
-  - name: wait db container starts before restore de dump
+  - name: wait db container starts before restore the dump
     wait_for:
       host: "{{ db_container.ansible_facts.docker_container.NetworkSettings.IPAddress }}"
       port: 3306
@@ -176,6 +176,7 @@
     synchronize: 
       src: files/limesurvey
       dest: /tmp/
+      use_ssh_args: yes
   
   - name: recover "upload" folder on docker host
     unarchive:

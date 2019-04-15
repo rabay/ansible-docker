@@ -87,17 +87,17 @@
 
       when: "lvmVolume not in var_lvs.stdout" #logical volume block
 
-    - name: fail if logical volume alredy exists
-      fail:
-        msg: "The logical volume {{lvmVolume}} already exists."
-      when: "lvmVolume in var_lvs.stdout"
+    # - name: fail if logical volume alredy exists
+    #   fail:
+    #     msg: "The logical volume {{lvmVolume}} already exists."
+    #   when: "lvmVolume in var_lvs.stdout"
 
     when: "lvmDisk not in var_pvs.stdout" #physical volume block
 
-  - name: fail if physical volume alredy exists
-    fail:
-      msg: "The physical volume {{lvmDisk}} already exists."
-    when: "lvmDisk in var_pvs.stdout"
+  # - name: fail if physical volume alredy exists
+  #   fail:
+  #     msg: "The physical volume {{lvmDisk}} already exists."
+  #   when: "lvmDisk in var_pvs.stdout"
 
   tags: #initial block
     - docker_storage

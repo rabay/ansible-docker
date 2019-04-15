@@ -2,6 +2,14 @@
 #global
 ansible_shell_type: "sh" #for linux hosts only. On windows, override this variable on playbook with value "powershell"
 
+#server docker
+srv_hostname: "dockerlms"
+srv_locale: "en_US.UTF-8"
+srv_keymap: "br-abnt2"
+srv_timezone: "America/Sao_Paulo"
+srv_disks: 
+  - sda
+
 #lvm
 lvmDisk: "/dev/sdb"
 lvmGroup: "vg_docker"

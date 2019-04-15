@@ -1,9 +1,9 @@
 ---
 # tasks file for cntlm
-- name: Populate service facts
-  service_facts:
-
 - block:
+
+  - name: Populate service facts
+    service_facts:
 
   - name: stop service cntlm, if exists and running
     systemd:
@@ -34,7 +34,7 @@
       force: yes
     changed_when: false
 
-  - name: program for recreate PID dir afeter a reboot
+  - name: program for recreate PID dir after a reboot
     copy:
       dest: /usr/lib/tmpfiles.d/cntlm.conf
       content: |
@@ -62,9 +62,6 @@
       mode: 0644
       backup: yes
       force: yes
-    when: enableproxy
-    tags:
-      - cntlm
   
   when: enableproxy
   tags:

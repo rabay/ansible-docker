@@ -1,7 +1,27 @@
 ---
+  - import_playbook: windows.yml
+
   - hosts: docker
     become: true
     gather_facts: false
+
+    vars:
+      srv_disks:
+        - sda
+        - sdb
+
+    tasks:
+      - name: change the docker VM hostname
+        command: "hostnamectl set-hostname {{ srv_hostname }}"
+        changed_when: false
+
+      - name: add myself to /etc/hosts
+        lineinfile:
+          dest: /etc/hosts
+          regexp: '^127\.0\.0\.1[ \t]+localhost'
+          line: "127.0.0.1 localhost {{ srv_hostname }}"
+          state: present
+
     roles:
-    - cntlm
-    - config
+      - cntlm
+      - config

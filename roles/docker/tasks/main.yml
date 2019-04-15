@@ -1,5 +1,8 @@
 ---
 # tasks file for docker
+
+- block:
+
   - name: install pre-requisites
     yum:
       name: "{{ packages }}"
@@ -14,22 +17,16 @@
         - bash-completion
         - MySQL-python
         - mariadb
-    tags:
-      - docker_install
 
   - name: start cntlm
     command: systemctl start cntlm
     when: enableproxy
     changed_when: false
-    tags: 
-      - docker_install
 
   - name: enable kernel user namespaces
     shell: 'grubby --args="namespace.unpriv_enable=1 user_namespace.enable=1" --update-kernel="$(grubby --default-kernel)"'
     notify: reboot docker server
     changed_when: false
-    tags: 
-      - docker_install
 
   - name: config user namespaces max number
     copy: 
@@ -40,20 +37,20 @@
       owner: root
     notify: reboot docker server
     changed_when: false
-    tags: 
-      - docker_install
+
+  - name: Populate service facts
+    service_facts:
+
+  - debug: var=ansible_facts.services
 
   - name: install docker-ce repo
     command: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    when: "'docker.service' not in ansible_facts.services"
     changed_when: false
-    tags: 
-      - docker_install
 
   - name: disable docker-ce repo
     command: yum-config-manager --disable docker-ce-stable
     changed_when: false
-    tags: 
-      - docker_install
 
   - name: install docker-ce
     yum:
@@ -67,27 +64,23 @@
         - docker-ce-cli
         - containerd.io
     notify: reboot docker server
-    tags:
-      - docker_install
+    when: "'docker.service' not in ansible_facts.services"
 
   - name: Ensure group "docker" exists
     group:
       name: docker
       state: present
-    tags: 
-      - docker_install
 
   - name: adding existing user 'ansible' to group docker
     user:
       name: ansible
       groups: docker
       append: yes
-    tags:
-      - docker_install
 
   - name: stop cntlm
     command: systemctl stop cntlm
     when: enableproxy
     changed_when: false
-    tags: 
-      - docker_install
+  
+  tags:
+    - docker_install

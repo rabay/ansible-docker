@@ -5,18 +5,18 @@
   block: #config block
 
   - name: configure system language (locale)
-    command: localectl set-locale LANG=en_US.UTF-8
+    command: "localectl set-locale LANG={{ srv_locale }}"
     changed_when: false
     notify: reboot server
 
   - name: configure keymapping
-    command: localectl set-keymap br-abnt2
+    command: "localectl set-keymap {{ srv_keymap }}"
     changed_when: false
     notify: reboot server
 
-  - name: set timezone to America/Sao_Paulo
+  - name: set timezone
     timezone:
-      name: America/Sao_Paulo
+      name: "{{ srv_timezone }}"
     changed_when: false
     notify: reboot server
 
@@ -82,6 +82,7 @@
         - net-tools
         - libselinux-python
         - bash-completion
+        - hyperv-daemons #integration services with hyper-v hypervisor
 
   - name: Enabling IP forward
     sysctl:
@@ -104,6 +105,23 @@
       state: stopped
       enabled: no
     changed_when: false
+
+  - name: enable dynamic memory on guest
+    copy:
+      dest: /etc/udev/rules.d/100-balloon.rules
+      mode: 0774
+      owner: root
+      group: root
+      content: |
+        SUBSYSTEM=="memory", ACTION=="add", ATTR{state}="online"
+      force: no
+    notify: reboot server
+
+  - name: disable disk io scheduler
+    shell: "echo noop > /sys/block/{{ item }}/queue/scheduler"
+    with_items: "{{ srv_disks }}"
+    changed_when: false
+    notify: reboot server
 
   always: #config block
     - name: stop cntlm

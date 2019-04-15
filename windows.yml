@@ -6,17 +6,90 @@
   vars:
     ansible_shell_type: "powershell"
     ansible_shell_executable: ""
+    hypv_vm_name: "{{ srv_hostname }}"
+    hypv_template_vm_path: "C:\\Users\\vrabay\\Downloads\\Hyper-V Exported VMs\\vm-centos-7-template\\Virtual Machines\\5FD656A7-96BE-47E6-BB97-EC91A264B8D4.vmcx"
+    hypv_template_dest_path: "C:\\Users\\Public\\Documents\\Hyper-V\\Virtual hard disks\\Imported VMs\\{{ hypv_vm_name }}\\"
+    hypv_template_name: "vm-centos-7-template"
+    hypv_vhd_dest_path: "{{ hypv_template_dest_path }}\\extra-disks\\{{ hypv_vm_name }}-disk2.vhdx"
 
   tasks:
-    - name: display a message to logged users
-      win_msg:
-        display_seconds: 30
-        msg: "Apenas um teste..."
+    - name: check if VM exist
+      win_shell: "Get-VM {{ hypv_vm_name }}"
+      register: check_vm
+      changed_when: false
+      ignore_errors: true
 
-    - name: execute ipconfig
-      win_shell: ipconfig
-      args:
-        executable: cmd.exe
-      register: ipc_win
+    - debug: var=check_vm
 
-    - debug: var=ipc_win
+    - name: import VM
+      win_shell: "Import-VM -Path \"{{ hypv_template_vm_path }}\" -Copy -GenerateNewId -VhdDestinationPath \"{{ hypv_template_dest_path }}\""
+      register: import_vm
+      when: hypv_vm_name not in check_vm.stdout
+
+    - debug: var=import_vm
+
+    - name: configure VM
+      win_shell: "Get-VM {{ hypv_template_name }} | Rename-VM -NewName {{ hypv_vm_name }} -Passthru"
+      register: rename_vm
+      when: hypv_vm_name not in check_vm.stdout
+
+    - debug: var=rename_vm
+
+    - name: check if VM created correctly
+      win_shell: "Get-VM {{ hypv_vm_name }}"
+      register: check_vm_again
+      changed_when: false
+
+    - debug: var=check_vm_again
+
+    - name: create new VHD
+      win_shell: "New-VHD -Path \"{{ hypv_vhd_dest_path }}\" -Dynamic -BlockSizeBytes 128MB -LogicalSectorSize 4KB -SizeBytes 2GB"
+      register: vhd_creation
+      when: hypv_vm_name in check_vm_again.stdout and 'Running' not in check_vm_again.stdout
+
+    - debug: var=vhd_creation
+
+    - name: add new disk to VM
+      win_shell: "Add-VMHardDiskDrive -VMName {{ hypv_vm_name }} -Path \"{{ hypv_vhd_dest_path }}\""
+      register: vm_add_vhd
+      when: hypv_vm_name in check_vm_again.stdout and 'Running' not in check_vm_again.stdout
+
+    - debug: var=vm_add_vhd
+
+    - name: start VM
+      win_shell: "Start-VM -Name {{ hypv_vm_name }}"
+      register: start_vm
+      when: hypv_vm_name in check_vm_again.stdout and 'Running' not in check_vm_again.stdout
+
+    - debug: var=start_vm
+
+    - name: wait VM start
+      win_wait_for: timeout=30
+      when: hypv_vm_name in check_vm_again.stdout #and 'Running' not in check_vm_again.stdout
+
+    - name: check if VM started
+      win_shell: "Get-VM {{ hypv_vm_name }}"
+      register: check_start_vm
+      changed_when: false
+      failed_when: "'Running' not in check_start_vm.stdout"
+
+    - debug: var=check_start_vm
+
+    - name: get VM IP
+      win_shell: "(GEt-VM {{ hypv_vm_name }} | Get-VMNetworkAdapter).IpAddresses | ?{$_ -notmatch ':'}"
+      register: getip_vm
+      when: hypv_vm_name in check_start_vm.stdout and 'Running' in check_start_vm.stdout
+      # fail_when: getip_vm.stdout_lines[0] == ""
+
+    - debug: var=getip_vm
+    - debug: var=getip_vm.stdout_lines[0]
+
+    - name: add VM to Ansible Inventory
+      add_host:
+        name: "{{ getip_vm.stdout_lines[0] }}"
+        groups: docker
+      register: addhost_vm
+      when: getip_vm.stdout_lines[0] != ""
+
+    - debug: var=addhost_vm
+    - debug: msg="play_hosts={{play_hosts}}"

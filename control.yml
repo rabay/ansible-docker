@@ -15,5 +15,5 @@
         tags:
           - config
     roles:
-    - cntlm
-    - config
+      # - cntlm
+      - config
